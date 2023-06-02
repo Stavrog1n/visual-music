@@ -1,0 +1,120 @@
+import pygame
+import pygame.midi
+import math
+
+# Initialize Pygame and the MIDI module
+pygame.init()
+pygame.midi.init()
+
+# Set up MIDI input
+input_device_id = pygame.midi.get_default_input_id()
+midi_input = pygame.midi.Input(input_device_id)
+
+# Set up MIDI output
+output_device_id = pygame.midi.get_default_output_id()
+midi_output = pygame.midi.Output(output_device_id)
+
+print("MIDI Input Device:", pygame.midi.get_device_info(input_device_id))
+print("MIDI Output Device:", pygame.midi.get_device_info(output_device_id))
+
+# Set up the Pygame window and drawing surface
+window_width, window_height = 800, 600
+screen = pygame.display.set_mode((window_width, window_height))
+clock = pygame.time.Clock()
+
+# List to store the dots' positions, note playing status, colors, and note names
+dots = []
+
+# Colors for each position
+colors = [(255, 0, 0),  # Red
+          (255, 128, 0),  # Orange
+          (255, 255, 0),  # Yellow
+          (128, 255, 0),  #
+          (0, 255, 0),  #
+          (0, 255, 128),  # Cyan
+          (0, 255, 255),  # Green
+          (0, 128, 255),  # Purple
+          (0, 0, 255),  # Light Green
+          (128, 0, 255),  # Light Red
+          (255, 0, 255),  # Light Blue
+          (255, 0, 128)]  # Magenta
+
+# Note names
+note_names = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
+
+# Calculate the positions and semitone values for the dots
+radius = min(window_width, window_height) // 2 - 20
+for semitone in range(12):
+    angle = (semitone - 3 % 12) * (2 * math.pi / 12)  # Adjust angle to position 'A' at the top
+    x = int(window_width // 2 + math.cos(angle) * radius)
+    y = int(window_height // 2 + math.sin(angle) * radius)
+    color = colors[semitone]
+    dots.append({"position": (x, y), "is_playing": False, "semitone": semitone, "color": color, "velocity": 0, "note_name": note_names[semitone]})
+
+# List to store the currently sounding dots
+sounding_dots = []
+
+# Main loop
+running = True
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+
+    if midi_input.poll():
+        midi_events = midi_input.read(10)  # Read up to 10 MIDI events (adjust as needed)
+        for midi_event in midi_events:
+            event, timestamp = midi_event
+            print("MIDI Event:", event, "Timestamp:", timestamp)
+
+            # Process MIDI event and send output
+            status, data1, data2, _ = event
+            midi_output.write_short(status, data1, data2)
+
+            # Find the corresponding dot and update its playing status and velocity
+            if status == 144:  # Note On event
+                for dot in dots:
+                    if dot["semitone"] == data1 % 12:
+                        dot["is_playing"] = True
+                        dot["velocity"] = data2
+                        sounding_dots.append(dot)
+                        break
+            elif status == 128:  # Note Off event
+                for dot in dots:
+                    if dot["semitone"] == data1 % 12:
+                        dot["is_playing"] = False
+                        dot["velocity"] = 0
+                        break
+
+    # Clear the screen
+    screen.fill((0, 0, 0))
+
+    # Draw the lines between sounding dots
+    for i in range(len(sounding_dots) - 1):
+        dot1 = sounding_dots[i]
+        dot2 = sounding_dots[i + 1]
+        if dot1["velocity"] != 0 and dot2["velocity"] != 0:  # Check velocity of both dots
+            line_width = int((dot1["velocity"] + dot2["velocity"]) / 2)  # Average velocity for line width
+            pygame.draw.line(screen, dot1["color"], dot1["position"], dot2["position"], line_width)
+
+
+    # Draw the dots and labels
+    font = pygame.font.SysFont(None, 30)
+    for dot in dots:
+        if dot["is_playing"]:
+            pygame.draw.circle(screen, dot["color"], dot["position"], dot["velocity"])
+        text = font.render(dot["note_name"], True, (255, 255, 255))
+        text_rect = text.get_rect(center=dot["position"])
+        screen.blit(text, text_rect)
+
+    # Update the display
+    pygame.display.flip()
+    clock.tick(30)
+
+# Cleanup
+midi_input.close()
+midi_output.close()
+pygame.midi.quit()
+pygame.quit()
+
+
