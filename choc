@@ -1,0 +1,128 @@
+import mido
+import pygame
+import math
+import threading
+import pygame.midi as midi
+
+# Define a function for the MIDI playback
+def play_midi_file(midi_file_path):
+    pygame.mixer.pre_init(44100, -16, 2, 2048)  # Initialize mixer with desired settings
+    pygame.mixer.init()
+    pygame.mixer.music.load(midi_file_path)
+    pygame.mixer.music.play()
+
+# Create a new thread for the MIDI playback
+midi_thread = threading.Thread(target=play_midi_file, args=('inventio2.mid',))
+midi_thread.start()
+
+# Initialize pygame
+pygame.init()
+screen = pygame.display.set_mode((800, 600))
+clock = pygame.time.Clock()
+
+# Define the range of MIDI note numbers
+start_note = 28
+end_note = 80
+
+# Initialize an empty dictionary for the colors
+colors = {}
+
+# Generate the colors for each MIDI note
+for note in range(start_note, end_note + 1):
+
+    # Calculate the reduced note number
+    reduced_note = note % 12
+
+    # Calculate the color values based on the reduced note number
+    red = reduced_note * 20
+    green = 255 - (reduced_note * 20)
+    blue = 255 - (255 - reduced_note * 20)
+
+    # Add the color to the dictionary
+    colors[note] = (red, green, blue)
+
+# Create empty dictionary to keep track of notes that have been played
+played_notes = {}
+
+# Load MIDI file
+midi_file = mido.MidiFile('inventio2.mid')
+
+# Set the number of dots
+num_dots = 12  
+# Calculate the angle between each dot
+angle_between_dots = 2 * math.pi / num_dots
+
+# Set the radius and center of the circles
+exterior_radius = 250
+interior_radius = 150
+exterior_circle_center_x = 400
+exterior_circle_center_y = 300
+interior_circle_center_x = 400
+interior_circle_center_y = 300
+
+# Variable to control pause state
+paused = False
+
+# Variable to store the currently playing note
+current_note = 0
+
+# Main game loop
+running = True
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            # Exit the program if the window is closed
+            running = False
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            # Toggle the pause state when the mouse button is clicked
+            paused = not paused
+
+    if not paused:
+        # Clear the screen
+        screen.fill((0, 0, 0))
+
+        # Loop over each message in the file
+        for message in midi_file.play():
+            try:
+                if message.type == 'note_on':
+                    if message.channel == 0:
+                        circle_center_x = exterior_circle_center_x
+                        circle_center_y = exterior_circle_center_y
+                        radius = exterior_radius
+                    elif message.channel == 1:
+                        circle_center_x = interior_circle_center_x
+                        circle_center_y = interior_circle_center_y
+                        radius = interior_radius
+
+                    # Get the color for this note number within the octave
+                    color = colors[message.note]
+
+                    # Calculate the angle of the dot
+                    dot_angle = angle_between_dots * (message.note % 12)
+
+                    # Calculate the x and y positions of the dot around the circumference of the circle
+                    x = int(circle_center_x + radius * math.cos(dot_angle))
+                    y = int(circle_center_y + radius * math.sin(dot_angle))
+
+                    # Draw a white dot at the x and y position if it's a new note
+                    if message.note != current_note:
+                        dot_radius = 25
+                        pygame.draw.circle(screen, (255, 255, 255), (x, y), dot_radius)
+
+                    # Draw the colored dot at the x and y position
+                    dot_radius = 30
+                    pygame.draw.circle(screen, color, (x, y), dot_radius)
+
+                    # Update the currently playing note
+                    current_note = message.note
+
+            except AttributeError:
+                pass
+
+            # Update the screen
+            pygame.display.flip()
+            clock.tick(60)
+
+# Clean up
+pygame.quit()
+
